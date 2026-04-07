@@ -5,9 +5,12 @@ import os
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'super_secret_key_for_flash_messages'
 
-# Reverted to Local SQLite (Since Supabase URL was unresolvable)
-basedir = os.path.abspath(os.path.dirname(__name__))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'inventory.db')
+# Database configuration: Use /tmp/ for Vercel serverless (Writable)
+if os.environ.get('VERCEL'):
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/inventory.db'
+else:
+    basedir = os.path.abspath(os.path.dirname(__file__))
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'inventory.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -41,7 +44,18 @@ def index():
         items = Item.query.filter(Item.name.ilike(f'%{search_query}%')).all()
     else:
         items = Item.query.all()
-    return render_template('index.html', items=items, search_query=search_query)
+    
+    # Summary Statistics
+    total_items = sum(item.quantity for item in items)
+    total_value = sum(item.quantity * item.price for item in items)
+    low_stock_count = sum(1 for item in items if item.quantity < 5)
+    
+    return render_template('index.html', 
+                         items=items, 
+                         search_query=search_query,
+                         total_items=total_items,
+                         total_value=total_value,
+                         low_stock_count=low_stock_count)
 
 # 2. Add a new product (Create)
 @app.route('/add', methods=['GET', 'POST'])
